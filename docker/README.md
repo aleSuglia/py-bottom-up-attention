@@ -1,24 +1,17 @@
-## Run the container
-Change to the *docker* directory of this repository:
+
+## Use the container (with docker ≥ 19.03)
+
 ```
-cd docker
-USER_ID=$UID docker-compose run detectron2
+cd docker/
+# Build:
+docker build -t py-bottom-up-attention .
+# Run:
+docker run --gpus all -it \
+	--shm-size=8gb --volume="/tmp/.X11-unix:/tmp/.X11-unix:rw" \
+	--name=py-bottom-up-attention \
+    --volume="<images_folder>:/images:rw" \
+    --volume=$HOME/.torch/fvcore_cache:/tmp:rw
+
 ```
 
-#### Using a persistent cache directory
-Prevents models to be re-downloaded on every run, by storing them in a cache directory.
-
-`docker-compose run --volume=/path/to/cache:/tmp:rw detectron2`
-
-## Rebuild the container
-Rebuild the container  by `USER_ID=$UID docker-compose build detectron2`.
-This is only necessary when `Dockerfile` has been changed. The initial build is done automatically.
-
-## Install new dependencies
-Add the following to `Dockerfile` to make persistent changes.
-```
-RUN sudo apt-get update && sudo apt-get install -y \
-  nano vim emacs
-RUN pip install --user pandas
-```
-Or run them in the container to make temporary changes.
+Replace `<image_folder>` with the folder on your workstation that contains the images that have to be processed.
