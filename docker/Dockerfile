@@ -19,7 +19,9 @@ RUN wget https://bootstrap.pypa.io/get-pip.py && \
 
 # install dependencies
 # See https://pytorch.org/ for other options if you use a different version of CUDA
-RUN pip install --user torch torchvision tensorboard cython
+RUN pip install --user https://download.pytorch.org/whl/cu101/torch-1.4.0-cp36-cp36m-linux_x86_64.whl
+RUN pip install --user https://download.pytorch.org/whl/cu101/torchvision-0.5.0-cp36-cp36m-linux_x86_64.whl 
+RUN pip install --user tensorboard cython
 RUN pip install --user 'git+https://github.com/cocodataset/cocoapi.git#subdirectory=PythonAPI'
 
 RUN pip install --user 'git+https://github.com/facebookresearch/fvcore'
@@ -27,11 +29,11 @@ RUN pip install --user 'git+https://github.com/facebookresearch/fvcore'
 RUN git clone https://github.com/aleSuglia/py-bottom-up-attention
 ENV FORCE_CUDA="1"
 ENV TORCH_CUDA_ARCH_LIST="Kepler;Kepler+Tesla;Maxwell;Maxwell+Tegra;Pascal;Volta;Turing"
-RUN pip install --user -e detectron2_repo
+RUN pip install --user -e py-bottom-up-attention
 
 # Set a fixed model cache directory.
 ENV FVCORE_CACHE="/tmp"
-WORKDIR /home/appuser/detectron2_repo
+WORKDIR /home/appuser/py-bottom-up-attention
 
 # run it, for example:
 # wget http://images.cocodataset.org/val2017/000000439715.jpg -O input.jpg
