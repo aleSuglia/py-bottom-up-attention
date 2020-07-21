@@ -138,7 +138,7 @@ def extract_features(args, detector, raw_images, given_boxes=None):
             original_boxes = []
 
             for i, boxes in enumerate(given_boxes):
-                raw_boxes = Boxes(torch.tensor(boxes, device=features.device))
+                raw_boxes = Boxes(torch.tensor(boxes, device=images.tensor.device))
                 raw_image = raw_images[i]
                 raw_height, raw_width = raw_image.shape[:2]
                 # Scale the box
