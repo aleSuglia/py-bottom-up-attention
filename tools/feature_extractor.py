@@ -66,58 +66,6 @@ def fast_rcnn_inference_single_image(
     return result, keep
 
 
-def extract_features_given_boxes(predictor, raw_image, raw_boxes):
-    with torch.no_grad():
-        raw_height, raw_width = raw_image.shape[:2]
-        print("Original image size: ", (raw_height, raw_width))
-
-        # Preprocessing
-        image = predictor.transform_gen.get_transform(raw_image).apply_image(raw_image)
-        print("Transformed image size: ", image.shape[:2])
-
-        # Scale the box
-        new_height, new_width = image.shape[:2]
-        scale_x = 1. * new_width / raw_width
-        scale_y = 1. * new_height / raw_height
-        # print(scale_x, scale_y)
-        boxes = raw_boxes.clone()
-        boxes.scale(scale_x=scale_x, scale_y=scale_y)
-
-        # ----
-        image = torch.as_tensor(image.astype("float32").transpose(2, 0, 1))
-        inputs = [{"image": image, "height": raw_height, "width": raw_width}]
-        images = predictor.model.preprocess_image(inputs)
-
-        # Run Backbone Res1-Res4
-        features = predictor.model.backbone(images.tensor)
-
-        # Run RoI head for each proposal (RoI Pooling + Res5)
-        proposal_boxes = [boxes]
-        features = [features[f] for f in predictor.model.roi_heads.in_features]
-        box_features = predictor.model.roi_heads._shared_roi_transform(
-            features, proposal_boxes
-        )
-        feature_pooled = box_features.mean(dim=[2, 3])  # pooled to 1x1
-        print('Pooled features size:', feature_pooled.shape)
-
-        # Predict classes and boxes for each proposal.
-        pred_class_logits, pred_proposal_deltas = predictor.model.roi_heads.box_predictor(feature_pooled)
-        print(pred_class_logits.shape)
-        pred_class_prob = torch.softmax(pred_class_logits, -1)
-        pred_scores, pred_classes = pred_class_prob[..., :-1].max(-1)
-
-        # Detectron2 Formatting (for visualization only)
-        roi_features = feature_pooled
-        instances = Instances(
-            image_size=(raw_height, raw_width),
-            pred_boxes=raw_boxes,
-            scores=pred_scores,
-            pred_classes=pred_classes
-        )
-
-        return instances, roi_features
-
-
 def extract_features(args, detector, raw_images, given_boxes=None):
     with torch.no_grad():
         inputs = []
@@ -136,9 +84,18 @@ def extract_features(args, detector, raw_images, given_boxes=None):
             # Process Boxes in batch mode
             proposal_boxes = []
             original_boxes = []
+            box_ids = []
 
-            for i, boxes in enumerate(given_boxes):
+            for i, boxes_data in enumerate(given_boxes):
+                boxes = []
+                curr_box_ids = []
+
+                for bid, bbox in boxes_data:
+                    boxes.append(bbox)
+                    curr_box_ids.append(bid)
+
                 raw_boxes = Boxes(torch.tensor(boxes, device=images.tensor.device))
+
                 raw_image = raw_images[i]
                 raw_height, raw_width = raw_image.shape[:2]
                 # Scale the box
@@ -149,6 +106,7 @@ def extract_features(args, detector, raw_images, given_boxes=None):
                 boxes.scale(scale_x=scale_x, scale_y=scale_y)
                 proposal_boxes.append(boxes)
                 original_boxes.append(raw_boxes)
+                box_ids.append(curr_box_ids)
 
             features = [features[f] for f in detector.model.roi_heads.in_features]
             box_features = detector.model.roi_heads._shared_roi_transform(
@@ -159,7 +117,7 @@ def extract_features(args, detector, raw_images, given_boxes=None):
             # Predict classes and boxes for each proposal.
             pred_class_logits, pred_proposal_deltas = detector.model.roi_heads.box_predictor(feature_pooled)
             pred_class_prob = torch.softmax(pred_class_logits, -1)
-            pred_scores, pred_classes = pred_class_prob[..., :-1].max(-1)
+            # pred_scores, pred_classes = pred_class_prob[..., :-1].max(-1)
 
             # Detectron2 Formatting (for visualization only)
             roi_features = feature_pooled
@@ -174,9 +132,9 @@ def extract_features(args, detector, raw_images, given_boxes=None):
                 instances = Instances(
                     image_size=raw_image.shape[:2],
                     pred_boxes=original_boxes[batch_idx],
-                    scores=pred_scores[indexes],
-                    pred_classes=pred_classes[indexes],
-                    features=roi_features[indexes]
+                    scores=pred_class_prob[indexes],
+                    features=roi_features[indexes],
+                    box_ids=box_ids[batch_idx]
                 )
 
                 outputs.append(instances)
@@ -245,18 +203,19 @@ def extract_features(args, detector, raw_images, given_boxes=None):
 def extract_dataset_features(args, detector, paths):
     for start in tqdm.tqdm(range(0, len(paths), args.batch_size)):
         pathXid_trunk = paths[start: start + args.batch_size]
-        img_paths, imgs, img_ids, boxes = [], [], [], []
+        img_paths, imgs, split_ids, img_ids, boxes = [], [], [], [], []
 
         for doc in pathXid_trunk:
             img_paths.append(doc["path"])
-            img_ids.append(doc["id"])
+            img_ids.append(doc["image_id"])
             imgs.append(cv2.imread(doc["path"]))
+            split_ids.append(doc["split"])
             if "boxes" in doc:
                 boxes.append(doc["boxes"])
 
         instances_list = extract_features(args, detector, imgs, boxes)
 
-        for img, img_id, instances in zip(imgs, img_ids, instances_list):
+        for img, img_id, split, instances in zip(imgs, img_ids, split_ids, instances_list):
             instances = instances.to('cpu')
             features = instances.features
 
@@ -266,15 +225,20 @@ def extract_dataset_features(args, detector, paths):
                 "img_id": img_id,
                 "img_h": img.shape[0],
                 "img_w": img.shape[1],
-                "objects_id": instances.pred_classes.numpy(),  # int64
+                "objects": instances.box_ids,  # int64
                 "objects_conf": instances.scores.numpy(),  # float32
                 "num_boxes": num_objects,
                 "boxes": instances.pred_boxes.tensor.numpy(),  # float32
                 "features": features.numpy()  # float32
             }
 
+            split_dir = os.path.join(args.output_dir, split)
+
+            if not os.path.exists(split_dir):
+                os.makedirs(split_dir)
+
             np.savez(
-                os.path.join(args.output_dir, str(img_id)),
+                os.path.join(split_dir, str(img_id)),
                 **item
             )
 
@@ -320,11 +284,12 @@ def load_image_annotations(image_root, images_metadata, use_gold_boxes):
         for image_data in split_data:
             ann = {
                 "path": os.path.join(image_root, image_data.get("file_name", f"{image_data['image_id']}.jpg")),
-                "id": image_data["image_id"]
+                "image_id": image_data["image_id"],
+                "split": split
             }
 
             if use_gold_boxes:
-                ann["boxes"] = [bbox_xywh_to_xyxy(o["bbox"]) for o in image_data["objects"]]
+                ann["boxes"] = [(o["id"], bbox_xywh_to_xyxy(o["bbox"])) for o in image_data["objects"]]
 
             annotations.append(
                 ann
