@@ -11,7 +11,6 @@ import torch
 import tqdm
 from torchvision.ops import nms
 
-import detectron2
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 from detectron2.modeling.postprocessing import detector_postprocess
@@ -19,9 +18,6 @@ from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs
 from detectron2.structures import Boxes, Instances
 
 # import some common libraries
-
-D2_ROOT = os.path.dirname(os.path.dirname(detectron2.__file__))  # Root of detectron2
-
 parser = argparse.ArgumentParser()
 parser.add_argument('--image_root', type=str,
                     help="Directory containing the dataset images")
@@ -339,8 +335,7 @@ def load_image_annotations(image_root, images_metadata, use_gold_boxes):
 
 def build_model():
     cfg = get_cfg()  # Renew the cfg file
-    cfg.merge_from_file(os.path.join(
-        D2_ROOT, "configs/VG-Detection/faster_rcnn_R_101_C4_caffemaxpool.yaml"))
+    cfg.merge_from_file("configs/VG-Detection/faster_rcnn_R_101_C4_caffemaxpool.yaml")
     cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 300
     cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.6
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.2
