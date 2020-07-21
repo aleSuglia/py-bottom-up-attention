@@ -2,7 +2,7 @@ FROM nvidia/cuda:10.1-cudnn7-devel
 
 ENV DEBIAN_FRONTEND noninteractive
 RUN apt-get update && apt-get install -y \
-	python3-opencv ca-certificates python3-dev git wget sudo && \
+	python3-opencv ca-certificates python3-dev nano git wget sudo && \
   rm -rf /var/lib/apt/lists/*
 
 # create a non-root user
@@ -24,7 +24,7 @@ RUN pip install --user 'git+https://github.com/cocodataset/cocoapi.git#subdirect
 
 RUN pip install --user 'git+https://github.com/facebookresearch/fvcore'
 # install detectron2
-RUN git clone https://github.com/facebookresearch/detectron2 detectron2_repo
+RUN git clone https://github.com/aleSuglia/py-bottom-up-attention
 ENV FORCE_CUDA="1"
 ENV TORCH_CUDA_ARCH_LIST="Kepler;Kepler+Tesla;Maxwell;Maxwell+Tegra;Pascal;Volta;Turing"
 RUN pip install --user -e detectron2_repo
