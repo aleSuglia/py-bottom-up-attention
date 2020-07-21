@@ -225,7 +225,7 @@ def extract_dataset_features(args, detector, paths):
                 "img_id": img_id,
                 "img_h": img.shape[0],
                 "img_w": img.shape[1],
-                "objects": instances.box_ids,  # int64
+                "objects2id": instances.box_ids,  # int64
                 "objects_conf": instances.scores.numpy(),  # float32
                 "num_boxes": num_objects,
                 "boxes": instances.pred_boxes.tensor.numpy(),  # float32
