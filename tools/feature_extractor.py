@@ -12,7 +12,6 @@ import tqdm
 from torchvision.ops import nms
 
 from detectron2.config import get_cfg
-from detectron2.data import MetadataCatalog
 from detectron2.engine import DefaultPredictor
 from detectron2.modeling.postprocessing import detector_postprocess
 from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs
@@ -277,15 +276,6 @@ def build_model():
     cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe.pkl"
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     detector = DefaultPredictor(cfg)
-
-    data_path = 'data/genome/1600-400-20'
-
-    vg_classes = []
-    with open(os.path.join(data_path, 'objects_vocab.txt')) as f:
-        for object in f.readlines():
-            vg_classes.append(object.split(',')[0].lower().strip())
-
-    MetadataCatalog.get("vg").thing_classes = vg_classes
 
     return detector
 
