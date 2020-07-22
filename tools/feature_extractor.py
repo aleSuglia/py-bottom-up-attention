@@ -12,12 +12,14 @@ import tqdm
 from torchvision.ops import nms
 
 from detectron2.config import get_cfg
+from detectron2.data import MetadataCatalog
 from detectron2.engine import DefaultPredictor
 from detectron2.modeling.postprocessing import detector_postprocess
 from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs
-from detectron2.structures import Boxes, Instances
+from detectron2.structures import Boxes, Instances, BoxMode
 
 # import some common libraries
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--image_root', type=str,
                     help="Directory containing the dataset images")
@@ -97,9 +99,11 @@ def extract_features(args, detector, raw_images, given_boxes=None):
                 raw_boxes = Boxes(torch.tensor(boxes, device=images.tensor.device))
 
                 raw_image = raw_images[i]
+                # Remember that raw_image has shape [height, width, color_channel]
                 raw_height, raw_width = raw_image.shape[:2]
+                # Remember that images[i] has shape [color_channel, height, width]
+                new_height, new_width = images[i].shape[1:]
                 # Scale the box
-                new_height, new_width = image.shape[:2]
                 scale_x = 1. * new_width / raw_width
                 scale_y = 1. * new_height / raw_height
                 boxes = raw_boxes.clone()
@@ -117,9 +121,9 @@ def extract_features(args, detector, raw_images, given_boxes=None):
             # Predict classes and boxes for each proposal.
             pred_class_logits, pred_proposal_deltas = detector.model.roi_heads.box_predictor(feature_pooled)
             pred_class_prob = torch.softmax(pred_class_logits, -1)
-            # pred_scores, pred_classes = pred_class_prob[..., :-1].max(-1)
+            # we reset the background class that we will ignore later on
+            pred_class_prob[:, -1] = 0.0
 
-            # Detectron2 Formatting (for visualization only)
             roi_features = feature_pooled
 
             outputs = []
@@ -242,41 +246,6 @@ def extract_dataset_features(args, detector, paths):
                 **item
             )
 
-
-def bbox_xywh_to_xyxy(xywh):
-    """Convert bounding boxes from format (xmin, ymin, w, h) to (xmin, ymin, xmax, ymax)
-
-    Parameters
-    ----------
-    xywh : list, tuple or numpy.ndarray
-        The bbox in format (x, y, w, h).
-        If numpy.ndarray is provided, we expect multiple bounding boxes with
-        shape `(N, 4)`.
-
-    Returns
-    -------
-    tuple or numpy.ndarray
-        The converted bboxes in format (xmin, ymin, xmax, ymax).
-        If input is numpy.ndarray, return is numpy.ndarray correspondingly.
-
-    """
-    if isinstance(xywh, (tuple, list)):
-        if not len(xywh) == 4:
-            raise IndexError(
-                "Bounding boxes must have 4 elements, given {}".format(len(xywh)))
-        w, h = np.maximum(xywh[2] - 1, 0), np.maximum(xywh[3] - 1, 0)
-        return xywh[0], xywh[1], xywh[0] + w, xywh[1] + h
-    elif isinstance(xywh, np.ndarray):
-        if not xywh.size % 4 == 0:
-            raise IndexError(
-                "Bounding boxes must have n * 4 elements, given {}".format(xywh.shape))
-        xyxy = np.hstack((xywh[:, :2], xywh[:, :2] + np.maximum(0, xywh[:, 2:4] - 1)))
-        return xyxy
-    else:
-        raise TypeError(
-            'Expect input xywh a list, tuple or numpy.ndarray, given {}'.format(type(xywh)))
-
-
 def load_image_annotations(image_root, images_metadata, use_gold_boxes):
     annotations = []
 
@@ -289,7 +258,8 @@ def load_image_annotations(image_root, images_metadata, use_gold_boxes):
             }
 
             if use_gold_boxes:
-                ann["boxes"] = [(o["id"], bbox_xywh_to_xyxy(o["bbox"])) for o in image_data["objects"]]
+                ann["boxes"] = [(o["id"], BoxMode.convert(o["bbox"], BoxMode.XYWH_ABS, BoxMode.XYXY_ABS)) for o in
+                                image_data["objects"]]
 
             annotations.append(
                 ann
@@ -304,12 +274,19 @@ def build_model():
     cfg.MODEL.RPN.POST_NMS_TOPK_TEST = 300
     cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST = 0.6
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = 0.2
-    cfg.INPUT.MIN_SIZE_TEST = 600
-    cfg.INPUT.MAX_SIZE_TEST = 1000
-    cfg.MODEL.RPN.NMS_THRESH = 0.7
     cfg.MODEL.WEIGHTS = "http://nlp.cs.unc.edu/models/faster_rcnn_from_caffe.pkl"
     cfg.MODEL.DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
     detector = DefaultPredictor(cfg)
+
+    data_path = 'data/genome/1600-400-20'
+
+    vg_classes = []
+    with open(os.path.join(data_path, 'objects_vocab.txt')) as f:
+        for object in f.readlines():
+            vg_classes.append(object.split(',')[0].lower().strip())
+
+    MetadataCatalog.get("vg").thing_classes = vg_classes
+
     return detector
 
 
