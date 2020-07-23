@@ -48,21 +48,21 @@ def fast_rcnn_inference_single_image(
     max_scores, max_classes = scores.max(1)  # R x C --> R
     num_objs = boxes.size(0)
     boxes = boxes.view(-1, 4)
-    idxs = torch.arange(num_objs) * num_bbox_reg_classes + max_classes
-    if torch.cuda.is_available():
-        idxs = idxs.cuda()
+    idxs = torch.arange(num_objs, device=boxes.device) * num_bbox_reg_classes + max_classes
     max_boxes = boxes[idxs]  # Select max boxes according to the max scores.
 
     # Apply NMS
     keep = nms(max_boxes, max_scores, nms_thresh)
     if topk_per_image >= 0:
         keep = keep[:topk_per_image]
-    boxes, scores = max_boxes[keep], max_scores[keep]
+
+    max_boxes = max_boxes[keep]
+    scores = scores[keep]
 
     result = Instances(image_shape)
-    result.pred_boxes = Boxes(boxes)
+    result.pred_boxes = Boxes(max_boxes)
     result.scores = scores
-    result.pred_classes = max_classes[keep]
+    result.box_ids = keep
 
     return result, keep
 
@@ -179,6 +179,7 @@ def extract_features(args, detector, raw_images, given_boxes=None):
                 )
                 if len(ids) >= args.min_boxes:
                     break
+
             instances_list.append(instances)
             ids_list.append(ids)
 
@@ -244,6 +245,7 @@ def extract_dataset_features(args, detector, paths):
                 os.path.join(split_dir, str(img_id)),
                 **item
             )
+
 
 def load_image_annotations(image_root, images_metadata, use_gold_boxes):
     annotations = []
