@@ -9,12 +9,11 @@ import cv2
 import numpy as np
 import torch
 import tqdm
-from torchvision.ops import nms
 
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
 from detectron2.modeling.postprocessing import detector_postprocess
-from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs
+from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs, fast_rcnn_inference_single_image
 from detectron2.structures import Boxes, Instances, BoxMode
 
 # import some common libraries
@@ -32,39 +31,6 @@ parser.add_argument("--score_threshold", type=float, help="Score threshold for t
 parser.add_argument("--gold_boxes", action="store_true",
                     help="Specify if you want to use gold bounding boxes instead of region proposals")
 args = parser.parse_args()
-
-
-def fast_rcnn_inference_single_image(
-        boxes, scores, image_shape, score_thresh, nms_thresh, topk_per_image
-):
-    scores = scores[:, :-1]
-    num_bbox_reg_classes = boxes.shape[1] // 4
-    # Convert to Boxes to use the `clip` function ...
-    boxes = Boxes(boxes.reshape(-1, 4))
-    boxes.clip(image_shape)
-    boxes = boxes.tensor.view(-1, num_bbox_reg_classes, 4)  # R x C x 4
-
-    # Select max scores
-    max_scores, max_classes = scores.max(1)  # R x C --> R
-    num_objs = boxes.size(0)
-    boxes = boxes.view(-1, 4)
-    idxs = torch.arange(num_objs, device=boxes.device) * num_bbox_reg_classes + max_classes
-    max_boxes = boxes[idxs]  # Select max boxes according to the max scores.
-
-    # Apply NMS
-    keep = nms(max_boxes, max_scores, nms_thresh)
-    if topk_per_image >= 0:
-        keep = keep[:topk_per_image]
-
-    max_boxes = max_boxes[keep]
-    scores = scores[keep]
-
-    result = Instances(image_shape)
-    result.pred_boxes = Boxes(max_boxes)
-    result.scores = scores
-    result.box_ids = keep
-
-    return result, keep
 
 
 def extract_features(args, detector, raw_images, given_boxes=None):
@@ -229,7 +195,7 @@ def extract_dataset_features(args, detector, paths):
                 "img_id": img_id,
                 "img_h": img.shape[0],
                 "img_w": img.shape[1],
-                "objects2id": instances.box_ids,  # int64
+                "objects2id": instances.box_ids if hasattr(instances, "box_ids") else np.arange(num_objects),  # int64
                 "objects_conf": instances.scores.numpy(),  # float32
                 "num_boxes": num_objects,
                 "boxes": instances.pred_boxes.tensor.numpy(),  # float32
