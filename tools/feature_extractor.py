@@ -228,7 +228,10 @@ def extract_dataset_features(args, detector, paths):
         for doc in pathXid_trunk:
             img_paths.append(doc["path"])
             img_ids.append(doc["image_id"])
-            imgs.append(cv2.imread(doc["path"]))
+            image = cv2.imread(doc["path"])
+            if image is None:
+                raise ValueError(f"Unable to read image {doc['path']}")
+            imgs.append(image)
             split_ids.append(doc["split"])
             if "boxes" in doc:
                 boxes.append(doc["boxes"])
