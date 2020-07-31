@@ -9,10 +9,10 @@ import cv2
 import numpy as np
 import torch
 import tqdm
+from torchvision.ops import nms
 
 from detectron2.config import get_cfg
 from detectron2.engine import DefaultPredictor
-from detectron2.layers import batched_nms
 from detectron2.modeling.postprocessing import detector_postprocess
 from detectron2.modeling.roi_heads.fast_rcnn import FastRCNNOutputs
 from detectron2.structures import Boxes, Instances, BoxMode
@@ -35,7 +35,7 @@ args = parser.parse_args()
 
 
 def fast_rcnn_inference_single_image(
-        boxes, scores, image_shape, score_thresh, nms_thresh, topk_per_image
+        boxes, scores, image_shape, nms_thresh, topk_per_image
 ):
     """
     Single-image inference. Return bounding-box detection results by thresholding
@@ -56,31 +56,30 @@ def fast_rcnn_inference_single_image(
     boxes.clip(image_shape)
     boxes = boxes.tensor.view(-1, num_bbox_reg_classes, 4)  # R x C x 4
 
-    # Filter results based on detection scores
-    filter_mask = scores > score_thresh  # R x K
-    # R' x 2. First column contains indices of the R predictions;
-    # Second column contains indices of classes.
-    filter_inds = filter_mask.nonzero()
-    if num_bbox_reg_classes == 1:
-        boxes = boxes[filter_inds[:, 0], 0]
-    else:
-        boxes = boxes[filter_mask]
-    scores = scores[filter_mask]
+    # Select max scores
+    max_scores, max_classes = scores.max(1)  # R x C --> R
+    num_objs = boxes.size(0)
+    boxes = boxes.view(-1, 4)
+    num_objs = torch.arange(num_objs)
+    if torch.cuda.is_available():
+        num_objs = num_objs.cuda()
+    idxs = num_objs * num_bbox_reg_classes + max_classes
+    max_boxes = boxes[idxs]  # Select max boxes according to the max scores.
 
-    # Apply per-class NMS
-    keep = batched_nms(boxes, scores, filter_inds[:, 1], nms_thresh)
+    # Apply NMS
+    keep = nms(max_boxes, max_scores, nms_thresh)
     if topk_per_image >= 0:
         keep = keep[:topk_per_image]
-    boxes, scores, filter_inds = boxes[keep], scores[keep], filter_inds[keep]
+    boxes, scores = max_boxes[keep], max_scores[keep]
 
     result = Instances(image_shape)
     result.pred_boxes = Boxes(boxes)
-    class_distr_scores = class_distr_scores[filter_inds[:, 0]]
+    class_distr_scores = class_distr_scores[keep]
     # we set the background probability to 0
     class_distr_scores[:, -1] = 0.0
     result.scores = class_distr_scores
-    result.pred_classes = filter_inds[:, 1]
-    return result, filter_inds[:, 0]
+
+    return result, keep
 
 
 def extract_features(args, detector, raw_images, given_boxes=None):
@@ -188,10 +187,10 @@ def extract_features(args, detector, raw_images, given_boxes=None):
         probs_list = rcnn_outputs.predict_probs()
         boxes_list = rcnn_outputs.predict_boxes()
         for probs, boxes, image_size in zip(probs_list, boxes_list, images.image_sizes):
-            for nms_thresh in np.arange(0.3, 1.0, 0.1):
+            for nms_thresh in np.arange(0.5, 1.0, 0.1):
                 instances, ids = fast_rcnn_inference_single_image(
                     boxes, probs, image_size,
-                    score_thresh=args.score_threshold, nms_thresh=nms_thresh, topk_per_image=args.max_boxes
+                    nms_thresh=nms_thresh, topk_per_image=args.max_boxes
                 )
                 if len(ids) >= args.min_boxes:
                     break
