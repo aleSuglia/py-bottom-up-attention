@@ -33,7 +33,7 @@ parser.add_argument("--gold_boxes", action="store_true",
                     help="Specify if you want to use gold bounding boxes instead of region proposals")
 parser.add_argument("--ignore_if_present", action="store_true",
                     help="If specified the script will ignore features files that are already present")
-parser.add_argument("-is_gw", action="store_true", help="Defines whether we're processing GuessWhat?!")
+parser.add_argument("--is_gw", action="store_true", help="Defines whether we're processing GuessWhat?!")
 args = parser.parse_args()
 
 
@@ -323,7 +323,7 @@ def main(args):
         os.makedirs(args.output_dir)
 
     paths = load_image_annotations(args.image_root, images_metadata, args.output_dir, args.gold_boxes,
-                                   args.ignore_if_present)  # Get paths and ids
+                                   args.ignore_if_present, args.is_gw)  # Get paths and ids
     print("-- Loading FastRCNN model...")
     detector = build_model()
 
