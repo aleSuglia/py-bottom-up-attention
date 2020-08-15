@@ -31,6 +31,8 @@ parser.add_argument("--max_boxes", type=int, help="Maximum number of detected bo
 parser.add_argument("--score_threshold", type=float, help="Score threshold for the bounding box detection", default=0.2)
 parser.add_argument("--gold_boxes", action="store_true",
                     help="Specify if you want to use gold bounding boxes instead of region proposals")
+parser.add_argument("--ignore_if_present",
+                    help="If specified the script will ignore features files that are already present")
 args = parser.parse_args()
 
 
@@ -265,13 +267,19 @@ def extract_dataset_features(args, detector, paths):
             )
 
 
-def load_image_annotations(image_root, images_metadata, use_gold_boxes):
+def load_image_annotations(image_root, images_metadata, output_dir, use_gold_boxes=False, ignore_if_present=False):
     annotations = []
 
     for split, split_data in images_metadata.items():
         for image_data in split_data:
+            path = os.path.join(image_root, image_data.get("file_name", f"{image_data['image_id']}.jpg"))
+            feature_path = os.path.join(output_dir, split, f"{image_data['image_id']}.npz")
+
+            if ignore_if_present and os.path.exists(feature_path):
+                continue
+
             ann = {
-                "path": os.path.join(image_root, image_data.get("file_name", f"{image_data['image_id']}.jpg")),
+                "path": path,
                 "image_id": image_data["image_id"],
                 "split": split
             }
@@ -308,7 +316,8 @@ def main(args):
         print(f"Directory {args.output_dir} doesn't exist. Creating it...")
         os.makedirs(args.output_dir)
 
-    paths = load_image_annotations(args.image_root, images_metadata, args.gold_boxes)  # Get paths and ids
+    paths = load_image_annotations(args.image_root, images_metadata, args.output_dir, args.gold_boxes,
+                                   args.ignore_if_present)  # Get paths and ids
     print("-- Loading FastRCNN model...")
     detector = build_model()
 
