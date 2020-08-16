@@ -215,8 +215,8 @@ def extract_features(args, detector, raw_images, given_boxes=None):
         )):
             height = input_per_image.get("height", image_size[0])
             width = input_per_image.get("width", image_size[1])
-            raw_instances = detector_postprocess(instances, height, width)
-            raw_instances.features = roi_features_list[batch_idx]
+            raw_instances, nonempty = detector_postprocess(instances, height, width)
+            raw_instances.features = roi_features_list[batch_idx][nonempty]
             raw_instances_list.append(raw_instances)
 
         return raw_instances_list
@@ -271,9 +271,14 @@ def extract_dataset_features(args, detector, paths):
 def load_image_annotations(image_root, images_metadata, output_dir, use_gold_boxes=False, ignore_if_present=False,
                            is_gw=False):
     annotations = []
+    faulty = [114338, 92372449, 260056, 340039, 56599, 564931, 526057]
 
-    for split, split_data in images_metadata.items():
-        for image_data in split_data:
+    # for split, split_data in images_metadata.items():
+    #    for image_data in split_data:
+    for split in ["train"]:
+        for f in faulty:
+            image_data = {"image_id": f}
+
             if is_gw:
                 image_path = os.path.join(image_root, image_data.get("file_name", f"{image_data['image_id']}.jpg"))
             else:

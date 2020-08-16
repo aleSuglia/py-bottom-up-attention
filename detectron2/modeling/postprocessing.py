@@ -49,7 +49,7 @@ def detector_postprocess(results, output_height, output_width, mask_threshold=0.
         results.pred_keypoints[:, :, 0] *= scale_x
         results.pred_keypoints[:, :, 1] *= scale_y
 
-    return results
+    return results, output_boxes.nonempty()
 
 
 def sem_seg_postprocess(result, img_size, output_height, output_width):
