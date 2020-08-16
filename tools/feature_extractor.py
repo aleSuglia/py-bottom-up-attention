@@ -271,14 +271,9 @@ def extract_dataset_features(args, detector, paths):
 def load_image_annotations(image_root, images_metadata, output_dir, use_gold_boxes=False, ignore_if_present=False,
                            is_gw=False):
     annotations = []
-    faulty = [114338, 92372449, 260056, 340039, 56599, 564931, 526057]
 
-    # for split, split_data in images_metadata.items():
-    #    for image_data in split_data:
-    for split in ["train"]:
-        for f in faulty:
-            image_data = {"image_id": f}
-
+    for split, split_data in images_metadata.items():
+        for image_data in split_data:
             if is_gw:
                 image_path = os.path.join(image_root, image_data.get("file_name", f"{image_data['image_id']}.jpg"))
             else:
