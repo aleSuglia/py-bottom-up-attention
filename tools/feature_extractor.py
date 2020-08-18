@@ -275,7 +275,7 @@ def load_image_annotations(image_root, images_metadata, output_dir, use_gold_box
     for split, split_data in images_metadata.items():
         for image_data in split_data:
             if is_gw:
-                image_path = os.path.join(image_root, image_data.get("file_name", f"{image_data['image_id']}.jpg"))
+                image_path = os.path.join(image_root, f"{image_data['image_id']}.jpg")
             else:
                 image_path = os.path.join(image_root, split, f"{image_data['image_id']}.jpg")
 
