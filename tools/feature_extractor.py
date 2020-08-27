@@ -234,13 +234,13 @@ def extract_dataset_features(args, detector, paths):
             if image is None:
                 raise ValueError(f"Unable to read image {doc['path']}")
             imgs.append(image)
-            split_ids.append(doc["split"])
+            split_ids.append(doc["splits"])
             if "boxes" in doc:
                 boxes.append(doc["boxes"])
 
         instances_list = extract_features(args, detector, imgs, boxes)
 
-        for img, img_id, split, instances in zip(imgs, img_ids, split_ids, instances_list):
+        for img, img_id, splits, instances in zip(imgs, img_ids, split_ids, instances_list):
             instances = instances.to('cpu')
             features = instances.features
 
@@ -257,48 +257,53 @@ def extract_dataset_features(args, detector, paths):
                 "features": features.numpy()  # float32
             }
 
-            split_dir = os.path.join(args.output_dir, split)
+            # at this point we want to write the same features for every split
+            for split in splits:
+                split_dir = os.path.join(args.output_dir, split)
 
-            if not os.path.exists(split_dir):
-                os.makedirs(split_dir)
+                if not os.path.exists(split_dir):
+                    os.makedirs(split_dir)
 
-            np.savez(
-                os.path.join(split_dir, str(img_id)),
-                **item
-            )
+                np.savez(
+                    os.path.join(split_dir, str(img_id)),
+                    **item
+                )
 
 
 def load_image_annotations(image_root, images_metadata, output_dir, use_gold_boxes=False, ignore_if_present=False,
                            is_gw=False):
-    annotations = []
+    # image id -> image data, path, boxes (optional), splits
+    annotations = {}
 
     for split, split_data in images_metadata.items():
         for image_data in split_data:
-            if is_gw:
-                image_path = os.path.join(image_root, f"{image_data['image_id']}.jpg")
-            else:
-                image_path = os.path.join(image_root, split, f"{image_data['image_id']}.jpg")
+            image_id = image_data["image_id"] if "image_id" in image_data else image_data["id"]
 
-            feature_path = os.path.join(output_dir, split, f"{image_data['image_id']}.npz")
+            if is_gw:
+                image_path = os.path.join(image_root, f"{image_id}.jpg")
+            else:
+                image_path = os.path.join(image_root, split, f"{image_id}.jpg")
+
+            feature_path = os.path.join(output_dir, split, f"{image_id}.npz")
 
             if ignore_if_present and os.path.exists(feature_path):
                 continue
 
-            ann = {
-                "path": image_path,
-                "image_id": image_data["image_id"],
-                "split": split
-            }
+            if image_id not in annotations:
+                annotations[image_id] = {
+                    "path": image_path,
+                    "image_id": image_data["image_id"],
+                    "splits": set()
+                }
 
-            if use_gold_boxes:
-                ann["boxes"] = [(o["id"], BoxMode.convert(o["bbox"], BoxMode.XYWH_ABS, BoxMode.XYXY_ABS)) for o in
-                                image_data["objects"]]
+                if use_gold_boxes:
+                    annotations[image_id]["boxes"] = [
+                        (o["id"], BoxMode.convert(o["bbox"], BoxMode.XYWH_ABS, BoxMode.XYXY_ABS)) for o in
+                        image_data["objects"]]
 
-            annotations.append(
-                ann
-            )
+            annotations[image_id]["splits"].add(split)
 
-    return annotations
+    return list(annotations.values())
 
 
 def build_model():
