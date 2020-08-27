@@ -292,7 +292,7 @@ def load_image_annotations(image_root, images_metadata, output_dir, use_gold_box
             if image_id not in annotations:
                 annotations[image_id] = {
                     "path": image_path,
-                    "image_id": image_data["image_id"],
+                    "image_id": image_id,
                     "splits": set()
                 }
 
