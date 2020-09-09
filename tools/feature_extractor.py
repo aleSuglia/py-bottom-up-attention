@@ -287,7 +287,17 @@ def load_image_annotations(image_root, images_metadata, output_dir, use_gold_box
             feature_path = os.path.join(output_dir, split, f"{image_id}.npz")
 
             if ignore_if_present and os.path.exists(feature_path):
-                continue
+                # skip this image if not using gold boxes
+                if not use_gold_boxes:
+                    continue
+                else:
+                    # let's check that the feature data are consistent
+                    with np.load(feature_path) as data:
+                        objects2id = data.get("objects2id")
+
+                        # if they have the same number of annotations and they match, skip
+                        if objects2id == [o["id"] for o in image_data["objects"]]:
+                            continue
 
             if image_id not in annotations:
                 annotations[image_id] = {
