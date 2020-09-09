@@ -296,7 +296,7 @@ def load_image_annotations(image_root, images_metadata, output_dir, use_gold_box
                         objects2id = data.get("objects2id")
 
                         # if they have the same number of annotations and they match, skip
-                        if objects2id == [o["id"] for o in image_data["objects"]]:
+                        if np.all(objects2id == [o["id"] for o in image_data["objects"]]):
                             continue
 
             if image_id not in annotations:
