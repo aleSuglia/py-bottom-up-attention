@@ -2,11 +2,10 @@
 # Copyleft 2019 Project LXRT
 
 import argparse
-import json
-import os
-
 import cv2
+import json
 import numpy as np
+import os
 import torch
 import tqdm
 from torchvision.ops import nms
@@ -33,7 +32,11 @@ parser.add_argument("--gold_boxes", action="store_true",
                     help="Specify if you want to use gold bounding boxes instead of region proposals")
 parser.add_argument("--ignore_if_present", action="store_true",
                     help="If specified the script will ignore features files that are already present")
-parser.add_argument("--is_gw", action="store_true", help="Defines whether we're processing GuessWhat?!")
+parser.add_argument("--is_symlink", action="store_true",
+                    help="Defines whether we're processing symlinked image directories")
+parser.add_argument("--is_multisource", action="store_true",
+                    help="Defines whether we're processing a dataset with images coming from multiple sources")
+
 args = parser.parse_args()
 
 
@@ -271,7 +274,7 @@ def extract_dataset_features(args, detector, paths):
 
 
 def load_image_annotations(image_root, images_metadata, output_dir, use_gold_boxes=False, ignore_if_present=False,
-                           is_gw=False):
+                           is_symlink=False, is_multisource=False):
     # image id -> image data, path, boxes (optional), splits
     annotations = {}
 
@@ -279,8 +282,11 @@ def load_image_annotations(image_root, images_metadata, output_dir, use_gold_box
         for image_data in split_data:
             image_id = image_data["image_id"] if "image_id" in image_data else image_data["id"]
 
-            if is_gw:
+            if is_symlink:
                 image_path = os.path.join(image_root, f"{image_id}.jpg")
+            elif is_multisource:
+                # image root should be the main data directory containing all the datasets
+                image_path = os.path.join(image_root, image_data["source"], "images", f"{image_id}.jpg")
             else:
                 image_path = os.path.join(image_root, split, f"{image_id}.jpg")
 
