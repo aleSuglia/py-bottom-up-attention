@@ -5,14 +5,13 @@ from glob import glob
 
 parser = argparse.ArgumentParser(description="Python make_cococaption_id_names.py {cococaption basedir}\n\n"
                                              "After unpacking MS COCO zip files, you should end up with a\n"
-                                             "base directory with train2014, valid2014 and test2014 folder in it.\n"
+                                             "base directory with train2017 and valid2017 folder in it.\n"
                                              "Provide this base dir as the first argument to this script and it\n"
                                              "will create symbolic links in the 'raw' folder, where each\n"
-                                             "link name corresponds to the original image's ID.\n"
-                                             "This format is expected by the Guesswhat?! preprocessing.")
+                                             "link name corresponds to the original image's ID.\n")
 
 parser.add_argument("-image_dir", type=str, required=True, help="Input Image folder (WARNING absolute path)")
-parser.add_argument("-image_subdir", type=list, default=["train2014", "val2014", "test2014"],
+parser.add_argument("-image_subdir", nargs='+', default=["train2014", "val2014", "train2017", "val2017"],
                     help='Select the dataset subdir')
 parser.add_argument("-data_out", type=str, required=True, help="Output symlink folder (WARNING absolute path)")
 
@@ -22,12 +21,24 @@ assert args.image_dir.startswith(os.path.sep), "The path must be a root path: ".
 assert args.data_out.startswith(os.path.sep), "The path must be a root path: ".format(args.data_out)
 
 for path in args.image_subdir:
-    for name in glob(os.path.join(args.image_dir, path, "*")):
+    orig_path = os.path.join(args.image_dir, path)
+    file_names = glob(os.path.join(orig_path, "*"))
+    print(f"Processing {len(file_names)} files in folder {orig_path}")
+    for name in file_names:
 
-        # retrieve id images
-        res = re.match(r'.*_0*(\d+\.\w+)$', name)
+        # retrieve id images for COCO
+        res = re.match(r'0*(\d+\.\w+)$', name)
         if not res:
-            continue
+            filename = os.path.basename(name)
+            image_id, ext = os.path.splitext(filename)
+
+            # ignore if it's not an image
+            if ext.lower() not in (".jpg", ".png", ".jpeg"):
+                continue
+
+            image_filename = filename
+        else:
+            image_filename = res.group(1)
 
         # create symlink with id_image
-        os.symlink(name, os.path.join(args.data_out, res.group(1)))
+        os.symlink(name, os.path.join(args.data_out, image_filename))
