@@ -25,11 +25,10 @@ for path in args.image_subdir:
     file_names = glob(os.path.join(orig_path, "*"))
     print(f"Processing {len(file_names)} files in folder {orig_path}")
     for name in file_names:
-
+        filename = os.path.basename(name)
         # retrieve id images for COCO
-        res = re.match(r'0*(\d+\.\w+)$', name)
+        res = re.match(r'(\w*_\w*_)*0*(\d+.\w+)', filename)
         if not res:
-            filename = os.path.basename(name)
             image_id, ext = os.path.splitext(filename)
 
             # ignore if it's not an image
@@ -38,7 +37,7 @@ for path in args.image_subdir:
 
             image_filename = filename
         else:
-            image_filename = res.group(1)
+            image_filename = res.group(2)
 
         # create symlink with id_image
         os.symlink(name, os.path.join(args.data_out, image_filename))
