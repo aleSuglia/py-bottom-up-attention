@@ -39,5 +39,8 @@ for path in args.image_subdir:
         else:
             image_filename = res.group(2)
 
-        # create symlink with id_image
-        os.symlink(name, os.path.join(args.data_out, image_filename))
+        try:
+            # create symlink with id_image
+            os.symlink(name, os.path.join(args.data_out, image_filename))
+        except Exception as ex:
+            print(f"Error for file {name}. Skipping it!")
